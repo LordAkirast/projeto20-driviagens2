@@ -6,78 +6,68 @@ import dayjs from "dayjs";
 import bcrypt from "bcrypt"
 import { db } from "./database/database.connection.js";
 
-const app = express(); 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
 
 
-const createUser = Joi.object({
-    name: Joi.string().required(),
-    email: Joi.string().email().required(),
-    password: Joi.string().required(),
+const createPassenger = Joi.object({
+    firstName: Joi.string().min(2).max(100).required(),
+    lastName: Joi.string().min(2).max(100).required(),
 });
 
-const loginUser = Joi.object({
-    email: Joi.string().email().required(),
-    password: Joi.string().required(),
+const createCities = Joi.object({
+    name: Joi.string().min(2).max(50).required(),
 });
 
-const createService = Joi.object({
-    creator: Joi.string().required(),
-    serviceName: Joi.string().required(),
-    serviceDescription: Joi.string().required(),
-    serviceCategory: Joi.string().required(),
-    servicePrice: Joi.string().required(),
-    serviceDeadline: Joi.string().required(),
-    creatorEmail: Joi.string().email().required(),
+const createFlights = Joi.object({
+    origin: Joi.number().integer().min(1).required(),
+    destination: Joi.number().integer().min(1).required(),
+    date: Joi.date().required(),
 });
 
-
-const buyService = Joi.object({
-    buyer: Joi.string().required(),
-    seller: Joi.string().required(),
-    serviceId: Joi.number().integer().required(),
-    serviceQtd: Joi.number().integer().required(),
-    transactionPrice: Joi.number().required(),
-});
+const createTravels = Joi.object({
+    passengerId: Joi.number().integer().min(1).required(),
+    flightId: Joi.number().integer().min(1).required(),
+  });
+  
 
 
+function getCurrentTimestamp() {
+    return dayjs().format('YYYY-MM-DD HH:mm:ss');
+}
 
-/// adicionar para o usuario uma coluna de avaliação
+const createdAt = getCurrentTimestamp();
+console.log(createdAt);
 
-let token;
 
-const createdAt = dayjs().format('YYYY-MM-DD HH:mm:ss');
 
-app.post('/signup', async (req, res) => {
-    const { name, email, password, confirmPassword } = req.body
-    const lowerCaseemail = email.toLowerCase();
+app.post('/passengers', async (req, res) => {
+    const { firstName, lastName } = req.body
 
     console.log('SUCCESS ON ENTERING')
 
     try {
 
-        const validation = createUser.validate({ name, email, password }, { abortEarly: false });
+        const validation = createPassenger.validate({ firstName, lastName }, { abortEarly: false });
         if (validation.error) {
             const errors = validation.error.details.map((detail) => detail.message);
             return res.status(422).json(errors);
         }
 
-        if (password !== confirmPassword) {
-            return res.status(422).send('Password and confirmPassword must match.');
-        }
-
-        // Encriptação da senha
-        const passCrypt = bcrypt.hashSync(password, 10);
-
-        const userVerify = await db.query('SELECT * FROM USERS where email = $1', [email]);
+        const userVerify = await db.query('SELECT * FROM PASSENGERS where firstname = $1 AND lastname = $2;', [firstName, lastName]);
         if (userVerify.rows.length > 0) {
-            return res.status(409).send('There is an user already with this email!');
+            return res.status(409).send('There is a passenger already with this name and last name!');
         } else {
-            const user = await db.query('INSERT INTO USERS (name, email, password, "createdat") values ($1, $2, $3, $4);', [name, lowerCaseemail, passCrypt, createdAt]);
-            console.log('USER CREATED!')
-            return res.status(201).send('User created!');
+            const passenger = await db.query('INSERT INTO passengers (firstname, lastname) values ($1, $2);', [firstName, lastName]);
+            console.log('PASSENGER CREATED!')
+            const data = {
+                id: userVerify.rows.id,
+                firstName: userVerify.rows.firstName,
+                lastName: userVerify.rows.lastName,
+            }
+            return res.status(201).send(data);
         }
     } catch (err) {
         return res.status(500).send(err.message);
@@ -85,7 +75,140 @@ app.post('/signup', async (req, res) => {
 
 })
 
-const port = process.env.PORT || 5000
-app.listen(port, () => {
-    console.log(`Servidor rodando na porta ${port}`)
+
+app.post('/cities', async (req, res) => {
+    const { name } = req.body
+
+    console.log('SUCCESS ON ENTERING')
+
+    try {
+
+        const validation = createCities.validate({ name }, { abortEarly: false });
+        if (validation.error) {
+            const errors = validation.error.details.map((detail) => detail.message);
+            return res.status(422).json(errors);
+        }
+
+        const citiesVerify = await db.query('SELECT * FROM CITIES where name = $1;', [name]);
+        if (citiesVerify.rows.length > 0) {
+            return res.status(409).send('There is a city already with this name!');
+        } else {
+            const city = await db.query('INSERT INTO cities (name) values ($1);', [name]);
+            console.log('CITY CREATED!')
+            const data = {
+                id: citiesVerify.rows.id,
+                name: citiesVerify.rows.name
+            }
+            return res.status(201).send(data);
+        }
+    } catch (err) {
+        return res.status(500).send(err.message);
+    }
+
 })
+
+
+
+
+app.post('/flights', async (req, res) => {
+    const { origin, destination, date } = req.body;
+
+    // Formatar a data usando dayjs
+    const formattedDate = dayjs(date, 'DD-MM-YYYY').format('YYYY-MM-DD');
+
+    const createdAt = getCurrentTimestamp(); // Mova esta linha para cá
+
+    console.log('SUCCESS ON ENTERING - Flights');
+    console.log(date);
+    console.log(formattedDate);
+
+    try {
+        const validation = createFlights.validate({ origin, destination, date: formattedDate }, { abortEarly: false });
+        if (validation.error) {
+            const errors = validation.error.details.map((detail) => detail.message);
+            return res.status(422).json(errors);
+        }
+
+        console.log('PASSED SCHEMA - Flights');
+        console.log(origin, destination, formattedDate);
+
+        const citiesVerify = await db.query('SELECT * FROM CITIES where id = $1;', [origin]);
+        const citiesDestinationVerify = await db.query('SELECT * FROM CITIES where id = $1;', [destination]);
+
+        console.log('PASSED CONST VERIFIES - FLights');
+        if (citiesVerify.rows.length === 0) {
+            console.log('origin city not found')
+            return res.status(404).send('Origin city not found!');
+        } else if (citiesDestinationVerify.rows.length === 0) {
+            console.log('destiny city not found')
+            return res.status(404).send('Destiny city not found!');
+        } else if (origin === destination) {
+            console.log('origin and destiny shall be different')
+            return res.status(409).send('Origin and Destination needs to have different values!');
+        } else if (date < createdAt) {
+            return res.status(422).send('Date must be higher than actual date.');
+        }
+        else {
+            console.log('PASSED VERIFICATIONS IF ELSE - FLights');
+            const flights = await db.query('INSERT INTO flights (origin, destination, date) values ($1,$2,$3);', [origin, destination, date]);
+            console.log('FLIGHT CREATED!')
+            const flightsVerify = await db.query('SELECT * FROM FLIGHTS WHERE origin = $1 AND destination = $2 and date = $3;', [origin, destination, date])
+            // const data = {
+            //     id: flightsVerify.rows.id,
+            //     origin: flightsVerify.rows.origin,
+            //     destination: flightsVerify.rows.destination,
+            //     date: flightsVerify.rows.date,
+            // }
+            return res.status(201).send('data');
+        }
+    } catch (err) {
+        console.log(' failure - FLights');
+        return res.status(500).send(err.message);
+    }
+
+})
+
+
+app.post('/travels', async (req, res) => {
+    const { passengerId, flightId } = req.body
+
+    console.log('SUCCESS ON ENTERING - travels')
+
+    try {
+
+        const validation = createTravels.validate({ passengerId, flightId }, { abortEarly: false });
+        if (validation.error) {
+            const errors = validation.error.details.map((detail) => detail.message);
+            return res.status(422).json(errors);
+        }
+
+        const flightsVerify = await db.query('SELECT * FROM flights where id = $1;', [flightId]);
+        const passengerVerify = await db.query('SELECT * FROM passengers where id = $1;', [passengerId]);
+        if (flightsVerify.rows.length === 0) {
+            return res.status(404).send('Flight not found!');
+        } else if (passengerVerify.rows.length === 0) {
+            return res.status(404).send('Passenger not found!');
+        }  else{
+            const travels = await db.query('INSERT INTO travels (passengerId,flightId ) values ($1, $2);', [passengerId, flightId]);
+            const travelsVerify = await db.query('SELECT * FROM TRAVELS WHERE passengerId = $1 AND flightId = $2;', [passengerId, flightId]);
+            console.log('TRAVEL CREATED!')
+            const data = {
+                id: travelsVerify.rows.id,
+                passengerId: travelsVerify.rows.passengerId,
+                flightId: travelsVerify.rows.flightId,
+            }
+            return res.status(201).send(data);
+        }
+    } catch (err) {
+        return res.status(500).send(err.message);
+    }
+
+})
+
+////remover e mudar o type module
+// const port = process.env.PORT || 5000
+// app.listen(port, () => {
+//     console.log(`Servidor rodando na porta ${port}`)
+// })
+
+export default app;
