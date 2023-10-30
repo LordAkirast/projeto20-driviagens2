@@ -30,8 +30,8 @@ const createFlights = Joi.object({
 const createTravels = Joi.object({
     passengerId: Joi.number().integer().min(1).required(),
     flightId: Joi.number().integer().min(1).required(),
-  });
-  
+});
+
 
 
 function getCurrentTimestamp() {
@@ -188,7 +188,7 @@ app.post('/travels', async (req, res) => {
             return res.status(404).send('Flight not found!');
         } else if (passengerVerify.rows.length === 0) {
             return res.status(404).send('Passenger not found!');
-        }  else{
+        } else {
             const travels = await db.query('INSERT INTO travels (passengerId,flightId ) values ($1, $2);', [passengerId, flightId]);
             const travelsVerify = await db.query('SELECT * FROM TRAVELS WHERE passengerId = $1 AND flightId = $2;', [passengerId, flightId]);
             console.log('TRAVEL CREATED!')
@@ -204,6 +204,66 @@ app.post('/travels', async (req, res) => {
     }
 
 })
+
+app.get('/flights', async (req, res) => {
+
+    try {
+        const { origin } = req.query;
+        const { destination } = req.query;
+        let flights;
+
+        if (origin) {
+            flights = await db.query('SELECT * FROM flights WHERE origin = $1 ORDER BY date DESC;', [origin]);
+        } else if (destination) {
+            flights = await db.query('SELECT * FROM flights WHERE destination = $1 ORDER BY date DESC;', [destination]);
+        } else if (destination && origin) {
+            flights = await db.query('SELECT * FROM flights WHERE destination = $1 AND origin = $2 ORDER BY date DESC;', [destination, origin]);
+        } else {
+            flights = await db.query('SELECT * FROM flights ORDER BY date DESC;');
+        }
+
+        res.status(200).json(flights.rows);
+    } catch (err) {
+        return res.status(500).send(err.message);
+    }
+});
+
+app.get('/passengers/travels', async (req, res) => {
+    try {
+        const { name } = req.query;
+        let query;
+
+        if (name) {
+            query = `
+                SELECT passengers.firstname || ' ' || passengers.lastname AS passenger,
+                COALESCE(COUNT(travels.passengerid), 0) AS travels
+                FROM passengers
+                LEFT JOIN travels ON passengers.id = travels.passengerid
+                WHERE passengers.firstname || ' ' || passengers.lastname ILIKE $1
+                GROUP BY passengers.id
+                ORDER BY travels DESC;
+            `;
+        } else {
+            query = `
+                SELECT passengers.firstname || ' ' || passengers.lastname AS passenger,
+                COALESCE(COUNT(travels.passengerid), 0) AS travels
+                FROM passengers
+                LEFT JOIN travels ON passengers.id = travels.passengerid
+                GROUP BY passengers.id
+                ORDER BY travels DESC;
+            `;
+        }
+
+        const queryParams = name ? [`%${name}%`] : [];
+
+        const result = await db.query(query, queryParams);
+
+        res.status(200).json(result.rows);
+    } catch (err) {
+        return res.status(500).send(err.message);
+    }
+});
+
 
 ////remover e mudar o type module
 // const port = process.env.PORT || 5000
