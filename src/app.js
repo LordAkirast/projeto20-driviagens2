@@ -265,10 +265,9 @@ app.get('/passengers/travels', async (req, res) => {
 });
 
 
-////remover e mudar o type module
-// const port = process.env.PORT || 5000
-// app.listen(port, () => {
-//     console.log(`Servidor rodando na porta ${port}`)
-// })
+const port = process.env.PORT || 5000
+app.listen(port, () => {
+	console.log(`Servidor rodando na porta ${port}`)
+})
 
 export default app;
